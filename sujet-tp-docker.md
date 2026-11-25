@@ -65,11 +65,11 @@ docker rm processus-test processus-test-2
 
 ### Questions
 
-1. Quel est le rôle du processus principal dans un conteneur ? Le processus principal (PID 1) est celui qui définit la vie du conteneur. Le conteneur démarre avec lui, et il s'arrête quand ce processus se termine.
-2. Quelle différence existe-t-il entre `docker stop` et `docker kill` ? `docker stop` envoie un `SIGTERM` pour laisser l'application s'arrêter proprement, puis un `SIGKILL` si elle ne s'arrête pas après le délai prévu (10 secondes par défaut). `docker kill` envoie directement un `SIGKILL`, sans délai (ou le signal choisi avec `--signal`).
-3. Pourquoi un conteneur s'arrête-t-il lorsque son processus principal se termine ? Parce qu'un conteneur n'existe que pour exécuter ce processus. Une fois qu'il est terminé, il n'y a plus rien à exécuter, donc Docker arrête le conteneur.
-4. Quelle différence existe-t-il entre `SIGTERM` et `SIGKILL` ? `SIGTERM` est une demande d'arrêt que le processus peut intercepter pour fermer ses fichiers et connexions proprement. `SIGKILL` ne peut pas être intercepté ni ignoré : le processus est tué immédiatement.
-5. Pourquoi est-il important qu'une application gère correctement les signaux d'arrêt ? Pour qu'elle puisse s'arrêter proprement (terminer les requêtes en cours, sauvegarder les données, fermer les connexions) et éviter d'être tuée brutalement par `SIGKILL` avec un risque de perte de données.
+1. Quel est le rôle du processus principal dans un conteneur ? Le processus principal est celui qui fait vivre le conteneur. Le conteneur démarre avec lui et s'arrête quand il se termine.
+2. Quelle différence existe-t-il entre `docker stop` et `docker kill` ? `docker stop` envoie un `SIGTERM` pour laisser l'application s'arrêter proprement, puis un `SIGKILL` si elle ne s'arrête pas après un délai. `docker kill` envoie directement un `SIGKILL`.
+3. Pourquoi un conteneur s'arrête-t-il lorsque son processus principal se termine ? Parce que le conteneur n'existe que pour exécuter ce processus. Quand il est terminé, il n'y a plus rien à exécuter.
+4. Quelle différence existe-t-il entre `SIGTERM` et `SIGKILL` ? `SIGTERM` est une demande d'arrêt que le processus peut intercepter pour s'arrêter proprement, alors que `SIGKILL` ne peut pas être ignoré et tue le processus immédiatement.
+5. Pourquoi est-il important qu'une application gère correctement les signaux d'arrêt ? Pour qu'elle puisse s'arrêter proprement, terminer ses requêtes et sauvegarder ses données, au lieu d'être tuée brutalement.
 
 ## Exercice 2 — Comprendre les couches d'une image et le système de fichiers
 
@@ -163,11 +163,11 @@ La modification précédente n'est pas présente dans ce nouveau conteneur.
 
 ### Questions
 
-1. Quelle différence existe-t-il entre les couches d'une image et la couche inscriptible d'un conteneur ? Les couches d'une image sont en lecture seule et partagées entre tous les conteneurs qui utilisent cette image. La couche inscriptible est propre à chaque conteneur et ajoutée par-dessus, c'est là que vont toutes les modifications.
-2. À quoi sert le mécanisme *copy-on-write* ? Quand un conteneur modifie un fichier qui vient d'une couche de l'image, le fichier est d'abord copié dans la couche inscriptible, puis modifié là. Cela évite de dupliquer toute l'image pour chaque conteneur.
-3. Pourquoi les modifications effectuées dans un conteneur ne modifient-elles pas directement l'image d'origine ? Parce que les couches de l'image sont en lecture seule. Les changements sont écrits uniquement dans la couche du conteneur, ce qui permet de réutiliser la même image pour plusieurs conteneurs sans qu'ils s'influencent.
-4. À quoi sert la commande `docker diff` ? Elle liste les changements faits dans le système de fichiers d'un conteneur par rapport à son image : fichiers ajoutés (`A`), modifiés (`C`) ou supprimés (`D`).
-5. Pourquoi les modifications apportées à la couche inscriptible sont-elles perdues lorsqu'on supprime le conteneur ? Parce que cette couche appartient au conteneur. Quand on le supprime, elle est supprimée avec lui. Pour conserver des données, il faut utiliser des volumes.
+1. Quelle différence existe-t-il entre les couches d'une image et la couche inscriptible d'un conteneur ? Les couches d'une image sont en lecture seule et partagées entre les conteneurs, alors que la couche inscriptible est propre à chaque conteneur et reçoit toutes ses modifications.
+2. À quoi sert le mécanisme *copy-on-write* ? Quand un conteneur modifie un fichier de l'image, le fichier est d'abord copié dans la couche inscriptible puis modifié là. Cela évite de dupliquer toute l'image.
+3. Pourquoi les modifications effectuées dans un conteneur ne modifient-elles pas directement l'image d'origine ? Parce que les couches de l'image sont en lecture seule, les changements sont écrits seulement dans la couche du conteneur.
+4. À quoi sert la commande `docker diff` ? Elle affiche les fichiers ajoutés, modifiés ou supprimés dans un conteneur par rapport à son image.
+5. Pourquoi les modifications apportées à la couche inscriptible sont-elles perdues lorsqu'on supprime le conteneur ? Parce que cette couche appartient au conteneur et est supprimée avec lui. Pour garder des données, il faut utiliser des volumes.
 
 ---
 
@@ -287,11 +287,11 @@ docker rm -f application-go-test
 
 ### Questions
 
-1. Pourquoi utiliser plusieurs instructions `FROM` ? Chaque `FROM` démarre une nouvelle étape. On peut ainsi compiler l'application dans une première étape, puis ne garder dans l'image finale que ce qui est nécessaire pour l'exécuter.
-2. Quelle différence existe-t-il entre l'étape `builder` et l'étape finale ? L'étape `builder` contient le compilateur Go et le code source, elle sert à produire l'exécutable. L'étape finale est une image vide (`scratch`) qui ne contient que l'exécutable copié depuis `builder`.
-3. Pourquoi l'image finale ne contient-elle pas le compilateur Go ? Parce que `COPY --from=builder` ne récupère que l'exécutable `/app`. Le reste de l'étape `builder` n'est pas conservé dans l'image finale.
-4. Quels sont les avantages d'une image finale minimale ? Elle est plus légère (téléchargement et démarrage plus rapides), prend moins de place, et présente une surface d'attaque réduite puisqu'il y a moins d'outils et de bibliothèques pouvant contenir des failles.
-5. Quelles précautions faut-il prendre avant d'utiliser une image `scratch` en production ? Il faut compiler un exécutable statique (`CGO_ENABLED=0`), car il n'y a aucune bibliothèque système. Il n'y a pas de shell, donc pas de `docker exec` pour déboguer. Il faut aussi penser à ajouter les certificats CA si l'application fait des appels HTTPS, un utilisateur non root, et les fuseaux horaires si besoin.
+1. Pourquoi utiliser plusieurs instructions `FROM` ? Chaque `FROM` démarre une nouvelle étape, ce qui permet de compiler dans une première étape et de ne garder que le résultat dans l'image finale.
+2. Quelle différence existe-t-il entre l'étape `builder` et l'étape finale ? L'étape `builder` contient le compilateur Go et sert à produire l'exécutable, alors que l'étape finale est une image vide qui contient seulement cet exécutable.
+3. Pourquoi l'image finale ne contient-elle pas le compilateur Go ? Parce que `COPY --from=builder` ne récupère que l'exécutable, le reste de l'étape `builder` n'est pas gardé.
+4. Quels sont les avantages d'une image finale minimale ? L'image est plus légère, plus rapide à télécharger et a moins de failles possibles puisqu'il y a moins d'outils dedans.
+5. Quelles précautions faut-il prendre avant d'utiliser une image `scratch` en production ? Il faut compiler un exécutable statique, car il n'y a aucune bibliothèque système. Il n'y a pas de shell pour déboguer, et il faut penser aux certificats HTTPS et à utiliser un utilisateur non root.
 
 ---
 
@@ -371,11 +371,11 @@ Remplacez `NOM_DU_CONTENEUR` par le nom d'un conteneur actif créé pour cette v
 
 ### Questions
 
-1. Pourquoi est-il préférable d'exécuter une application avec un utilisateur non privilégié ? Si l'application est compromise, l'attaquant n'a que les droits limités de cet utilisateur et non ceux de root, ce qui réduit les dégâts possibles et les risques d'évasion du conteneur.
-2. Que sont les capacités Linux ? Ce sont des morceaux des privilèges de root, découpés en droits plus précis (par exemple changer le propriétaire d'un fichier ou ouvrir un port inférieur à 1024). On peut donner à un processus uniquement celles dont il a besoin.
-3. Quelle différence existe-t-il entre `--read-only` et `--tmpfs` ? `--read-only` rend le système de fichiers racine du conteneur non modifiable. `--tmpfs` monte un espace temporaire en mémoire, inscriptible, à un endroit précis (ici `/tmp`).
-4. Pourquoi un conteneur peut-il avoir besoin de zones inscriptibles malgré un système de fichiers racine en lecture seule ? Beaucoup d'applications ont besoin d'écrire des fichiers temporaires, des sockets, des PID ou du cache. On autorise donc l'écriture uniquement à ces endroits, le reste du système reste protégé.
-5. Ces options suffisent-elles à garantir une isolation parfaite ? Justifiez votre réponse. Non. Les conteneurs partagent le noyau de l'hôte, donc une faille du noyau ou une mauvaise configuration peut permettre de s'échapper. Il faut aussi d'autres protections (seccomp, AppArmor, réseau, mises à jour, images de confiance).
+1. Pourquoi est-il préférable d'exécuter une application avec un utilisateur non privilégié ? Si l'application est compromise, l'attaquant n'a que les droits limités de cet utilisateur et pas ceux de root.
+2. Que sont les capacités Linux ? Ce sont des droits précis issus des privilèges de root, comme ouvrir un port inférieur à 1024. On ne donne au processus que ceux dont il a besoin.
+3. Quelle différence existe-t-il entre `--read-only` et `--tmpfs` ? `--read-only` rend le système de fichiers du conteneur non modifiable, alors que `--tmpfs` ajoute un espace temporaire en mémoire où l'on peut écrire.
+4. Pourquoi un conteneur peut-il avoir besoin de zones inscriptibles malgré un système de fichiers racine en lecture seule ? Parce que beaucoup d'applications doivent écrire des fichiers temporaires ou des sockets. On autorise l'écriture seulement à ces endroits.
+5. Ces options suffisent-elles à garantir une isolation parfaite ? Justifiez votre réponse. Non, car les conteneurs partagent le noyau de l'hôte. Une faille du noyau ou une mauvaise configuration peut permettre de sortir du conteneur.
 
 ---
 
@@ -440,11 +440,11 @@ docker rm diagnostic-test
 
 ### Questions
 
-1. Quelle différence existe-t-il entre un conteneur arrêté et un conteneur supprimé ? Un conteneur arrêté existe toujours : il apparaît avec `docker ps -a`, et on peut consulter ses logs et son code de sortie. Un conteneur supprimé n'existe plus du tout, avec sa couche inscriptible.
-2. Que signifie un code de sortie différent de zéro ? Que le processus s'est terminé avec une erreur. `0` signifie que tout s'est bien passé. Ici, `42` est un code choisi volontairement pour simuler une erreur.
-3. Quelle différence existe-t-il entre les sorties standard et d'erreur ? La sortie standard (`stdout`) sert aux messages normaux du programme, et la sortie d'erreur (`stderr`) aux messages d'erreur. On peut ainsi les traiter séparément (par exemple rediriger uniquement les erreurs).
-4. Pourquoi les journaux sont-ils utiles lorsqu'un conteneur se termine trop rapidement ? Parce qu'on n'a pas le temps de s'y connecter avec `docker exec`. `docker logs` permet de lire après coup ce que l'application a affiché et de comprendre pourquoi elle s'est arrêtée.
-5. Pourquoi faut-il examiner le code de sortie au lieu de se fier uniquement au message d'erreur ? Le message peut être absent, incomplet ou trompeur, alors que le code de sortie indique clairement si le processus a réussi ou échoué (et parfois pourquoi, comme `137` pour un `SIGKILL` ou un manque de mémoire). Il est aussi utilisable par des scripts et outils d'orchestration.
+1. Quelle différence existe-t-il entre un conteneur arrêté et un conteneur supprimé ? Un conteneur arrêté existe toujours et on peut voir ses logs et son code de sortie avec `docker ps -a`, alors qu'un conteneur supprimé n'existe plus.
+2. Que signifie un code de sortie différent de zéro ? Que le processus s'est terminé avec une erreur, alors que `0` signifie que tout s'est bien passé.
+3. Quelle différence existe-t-il entre les sorties standard et d'erreur ? La sortie standard sert aux messages normaux du programme et la sortie d'erreur aux messages d'erreur, ce qui permet de les séparer.
+4. Pourquoi les journaux sont-ils utiles lorsqu'un conteneur se termine trop rapidement ? Parce qu'on n'a pas le temps de se connecter au conteneur. `docker logs` permet de lire après coup ce que l'application a affiché.
+5. Pourquoi faut-il examiner le code de sortie au lieu de se fier uniquement au message d'erreur ? Parce que le message peut être absent ou trompeur, alors que le code de sortie montre clairement si le processus a réussi ou échoué.
 
 ---
 
@@ -520,11 +520,11 @@ docker rm -f logs-test
 
 ### Questions
 
-1. Pourquoi des journaux trop volumineux peuvent-ils poser problème ? Ils peuvent remplir le disque de l'hôte, ce qui ralentit ou fait planter Docker et les autres applications. Ils sont aussi plus difficiles à consulter.
-2. À quoi sert un pilote de journaux Docker ? Il définit comment et où Docker enregistre les logs d'un conteneur (fichiers locaux, syslog, système de logs externe, etc.).
-3. Quelle différence existe-t-il entre la consultation des journaux avec `docker logs` et leur stockage sur le long terme ? `docker logs` permet de lire les logs gardés par Docker sur l'hôte, ils disparaissent avec le conteneur et sont limités par la rotation. Le stockage long terme consiste à envoyer les logs vers un système externe pour les conserver, les rechercher et les analyser.
-4. Pourquoi la rotation des journaux est-elle importante sur un serveur ? Elle limite la taille des fichiers de logs en supprimant les plus anciens, donc elle évite de saturer le disque d'un serveur qui tourne en continu.
-5. Pourquoi faut-il choisir une stratégie de journalisation adaptée à l'environnement de production ? Parce que les besoins sont différents : conservation des logs, volume généré, recherche, sécurité, obligations légales. Une mauvaise stratégie peut faire perdre des informations utiles ou consommer trop de ressources.
+1. Pourquoi des journaux trop volumineux peuvent-ils poser problème ? Ils peuvent remplir le disque de l'hôte et faire planter Docker ou les autres applications.
+2. À quoi sert un pilote de journaux Docker ? Il définit comment et où Docker enregistre les logs d'un conteneur.
+3. Quelle différence existe-t-il entre la consultation des journaux avec `docker logs` et leur stockage sur le long terme ? `docker logs` permet de lire les logs gardés par Docker sur l'hôte et ils disparaissent avec le conteneur, alors que le stockage long terme conserve les logs ailleurs pour les rechercher et les analyser.
+4. Pourquoi la rotation des journaux est-elle importante sur un serveur ? Elle limite la taille des fichiers de logs en supprimant les plus anciens, ce qui évite de saturer le disque.
+5. Pourquoi faut-il choisir une stratégie de journalisation adaptée à l'environnement de production ? Parce que les besoins changent selon l'environnement, comme la durée de conservation ou le volume de logs, et une mauvaise stratégie peut faire perdre des informations ou consommer trop de ressources.
 
 ---
 
@@ -583,11 +583,11 @@ docker rm -f inspection-test
 
 ### Questions
 
-1. Quelle différence existe-t-il entre `docker exec` et `docker run` ? `docker run` crée et démarre un nouveau conteneur à partir d'une image. `docker exec` lance une commande supplémentaire dans un conteneur déjà en cours d'exécution, sans remplacer son processus principal.
-2. À quoi sert `docker top` ? À afficher les processus qui tournent dans un conteneur, depuis l'hôte, sans avoir à entrer dedans.
-3. Pourquoi `docker diff` peut-il être utile pendant un diagnostic ? Il montre quels fichiers ont été ajoutés, modifiés ou supprimés dans le conteneur depuis son démarrage. Cela aide à repérer des écritures inattendues ou à comprendre ce que fait l'application.
-4. Quelles informations fournit `docker stats` ? L'utilisation du CPU, de la mémoire (et sa limite), du réseau et des entrées/sorties disque, ainsi que le nombre de processus du conteneur.
-5. Pourquoi faut-il éviter de modifier manuellement un conteneur en production sans documenter les changements ? Parce que les modifications faites à la main sont perdues si le conteneur est recréé, et personne ne sait ce qui a été changé. Cela rend le système difficile à reproduire et à maintenir. Il vaut mieux modifier l'image ou la configuration et la versionner.
+1. Quelle différence existe-t-il entre `docker exec` et `docker run` ? `docker run` crée un nouveau conteneur à partir d'une image, alors que `docker exec` lance une commande dans un conteneur déjà actif.
+2. À quoi sert `docker top` ? Elle affiche les processus qui tournent dans un conteneur.
+3. Pourquoi `docker diff` peut-il être utile pendant un diagnostic ? Parce qu'elle montre quels fichiers ont été ajoutés ou modifiés, ce qui aide à repérer des écritures inattendues.
+4. Quelles informations fournit `docker stats` ? Elle donne l'utilisation du CPU, de la mémoire, du réseau et des entrées/sorties du conteneur.
+5. Pourquoi faut-il éviter de modifier manuellement un conteneur en production sans documenter les changements ? Parce que les modifications manuelles sont perdues si le conteneur est recréé et personne ne sait ce qui a été changé. Il vaut mieux modifier l'image ou la configuration.
 
 ---
 
@@ -596,7 +596,7 @@ docker rm -f inspection-test
 1. Les réponses argumentées aux questions.
 2. Une courte conclusion sur les améliorations apportées à l'image et à la sécurité du conteneur.
 
-Dans ce TP, on a vu comment rendre un conteneur plus propre et plus sûr. Côté image, le build multi-stage permet d'obtenir une image finale beaucoup plus légère, avec uniquement l'exécutable et sans compilateur, ce qui réduit la taille et la surface d'attaque. Côté sécurité, on limite les privilèges en utilisant un utilisateur non root, un système de fichiers en lecture seule avec un `tmpfs` pour les fichiers temporaires, la suppression des capacités Linux inutiles et `no-new-privileges`. On a aussi vu l'importance de la rotation des logs, et des outils de diagnostic (`logs`, `inspect`, `top`, `diff`, `stats`) pour comprendre ce qui se passe. Ces mesures restent insuffisantes seules, car les conteneurs partagent le noyau de l'hôte : il faut aussi mettre à jour les images et surveiller les applications.
+Dans ce TP, on a vu comment améliorer l'image et la sécurité d'un conteneur. Le build multi-stage permet d'obtenir une image finale légère qui contient seulement l'exécutable, sans compilateur. Pour la sécurité, on utilise un utilisateur non root, un système de fichiers en lecture seule avec un `tmpfs` pour les fichiers temporaires, la suppression des capacités inutiles et `no-new-privileges`. Ces mesures ne suffisent pas à elles seules, car les conteneurs partagent le noyau de l'hôte, il faut aussi mettre à jour les images et surveiller les applications.
 
 ---
 
